@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.csv": "csv",
+        "pthread.h": "c",
+        "signal.h": "c",
+        "setjmp.h": "c"
+    }
+}
