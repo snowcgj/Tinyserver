@@ -2,6 +2,7 @@
 /*
  *      tiny.c - A simple, iterative HTTP/1.0 Web server that uses the 
  *     GET method to serve static and dynamic content.
+ *          迭代的
  */
 
 #include "csapp.h"
@@ -15,6 +16,11 @@ void serve_dynamic(int fd, char *filename, char *cgiargs);
 void clienterror(int fd, char *cause, char *errnum, 
 		 char *shortmsg, char *longmsg);
 
+
+/*
+主函数：服务器的入口，负责初始化和监听连接。
+辅助函数：实现具体的请求处理、响应生成和错误处理逻辑。
+*/
 int main(int argc, char **argv) 
 {
     int listenfd, connfd, port, clientlen;
@@ -24,18 +30,26 @@ int main(int argc, char **argv)
     if (argc != 2) {
 	fprintf(stderr, "usage: %s <port>\n", argv[0]);
 	exit(1);
-    }
+    }  // 服务器需要一个命令行参数，即监听的端口号。
+        // 若参数数量不正确，输出用法信息并退出
     port = atoi(argv[1]);
 
     listenfd = Open_listenfd(port);
     while (1) {
-	clientlen = sizeof(clientaddr);
+	clientlen = sizeof(clientaddr);  //设置 clientlen 为 clientaddr 结构的大小。
 	connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen); //line:netp:tiny:accept
-	doit(connfd);                                             //line:netp:tiny:doit
+    /*
+    (SA *)&clientaddr：将 clientaddr 转换为通用的 sockaddr 指针。
+    &clientlen：指向客户端地址结构大小的指针。
+    返回值 connfd 是与客户端通信的连接套接字描述符。
+    */
+	doit(connfd);  // zhuyaohanshu1                                           //line:netp:tiny:doit
 	Close(connfd);                                            //line:netp:tiny:close
     }
 }
 /* $end tinymain */
+
+
 
 /*
  * doit - handle one HTTP request/response transaction
@@ -43,28 +57,48 @@ int main(int argc, char **argv)
 /* $begin doit */
 void doit(int fd) 
 {
-    int is_static;
-    struct stat sbuf;
+    int is_static;// 静态还是动态
+    struct stat sbuf;  //声明一个 stat 结构 sbuf，用于存储文件的状态信息。
     char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    /*
+        声明字符数组：
+        buf：用于存储读取的请求行。
+        method：HTTP 方法（如 GET）。
+        uri：请求的资源 URI。
+        version：HTTP 版本（如 HTTP/1.0）
+    */
     char filename[MAXLINE], cgiargs[MAXLINE];
-    rio_t rio;
+    // filename：解析后的文件名路径。   cgiargs：CGI 参数，用于动态内容请求。
+    rio_t rio;  //声明一个 rio_t 结构 rio，用于高效地读取客户端请求数据
   
     /* Read request line and headers */
-    Rio_readinitb(&rio, fd);
-    Rio_readlineb(&rio, buf, MAXLINE);                   //line:netp:doit:readrequest
+    Rio_readinitb(&rio, fd); 
+    Rio_readlineb(&rio, buf, MAXLINE);   
+    /* 
+    从客户端读取一行数据（请求行），存储在 buf 中。
+    例如：GET /index.html HTTP/1.0\r\n
+    */ //line:netp:doit:readrequest
     sscanf(buf, "%s %s %s", method, uri, version);       //line:netp:doit:parserequest
-    if (strcasecmp(method, "GET")) {                     //line:netp:doit:beginrequesterr
+    if (strcasecmp(method, "GET")) {      //strcasecmp 返回 0 表示相等，如果不为 0               
+        //line:netp:doit:beginrequesterr
        clienterror(fd, method, "501", "Not Implemented",
                 "Tiny does not implement this method");
+        // 不是就发送错误回去
         return;
     }                                                    //line:netp:doit:endrequesterr
-    read_requesthdrs(&rio);                              //line:netp:doit:readrequesthdrs
+    read_requesthdrs(&rio);      
+    //调用 read_requesthdrs 函数读取并忽略所有的 HTTP 请求头。
+    //line:netp:doit:readrequesthdrs
 
     /* Parse URI from GET request */
     is_static = parse_uri(uri, filename, cgiargs);       //line:netp:doit:staticcheck
     if (stat(filename, &sbuf) < 0) {                     //line:netp:doit:beginnotfound
 	clienterror(fd, filename, "404", "Not found",
 		    "Tiny couldn't find this file");
+    /*
+        调用 stat 系统调用获取文件的状态信息，存储在 sbuf 中。
+        如果 stat 返回值小于 0，表示文件不存在或无法访问。
+    */
 	return;
     }                                                    //line:netp:doit:endnotfound
 
@@ -72,10 +106,18 @@ void doit(int fd)
 	if (!(S_ISREG(sbuf.st_mode)) || !(S_IRUSR & sbuf.st_mode)) { //line:netp:doit:readable
 	    clienterror(fd, filename, "403", "Forbidden",
 			"Tiny couldn't read the file");
+        /*
+            检查文件是否为常规文件且拥有执行权限。
+            S_ISREG(sbuf.st_mode)：检查是否为常规文件。
+            S_IXUSR & sbuf.st_mode：检查所有者是否有执行权限。
+        */
 	    return;
 	}
-	serve_static(fd, filename, sbuf.st_size);        //line:netp:doit:servestatic
+	serve_static(fd, filename, sbuf.st_size); 
+    //调用 serve_static 函数提供静态内容，传入连接套接字描述符、文件名和文件大小。
+    //line:netp:doit:servestatic
     }
+
     else { /* Serve dynamic content */
 	if (!(S_ISREG(sbuf.st_mode)) || !(S_IXUSR & sbuf.st_mode)) { //line:netp:doit:executable
 	    clienterror(fd, filename, "403", "Forbidden",
@@ -95,9 +137,10 @@ void read_requesthdrs(rio_t *rp)
 {
     char buf[MAXLINE];
 
-    Rio_readlineb(rp, buf, MAXLINE);
+    Rio_readlineb(rp, buf, MAXLINE); //从 rp 读取一行数据（通常是第一个请求行之后的第一行请求头
     while(strcmp(buf, "\r\n")) {          //line:netp:readhdrs:checkterm
 	Rio_readlineb(rp, buf, MAXLINE);
+    //将读取的请求头内容输出到标准输出
 	printf("%s", buf);
     }
     return;
