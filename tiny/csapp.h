@@ -44,7 +44,7 @@ typedef struct {
     int rio_cnt;               /* Unread bytes in internal buf */
     char *rio_bufptr;          /* Next unread byte in internal buf */
     char rio_buf[RIO_BUFSIZE]; /* Internal buffer */
-} rio_t;
+} rio_t; // 这是一个缓冲区
 /* $end rio_t */
 
 /* External variables */

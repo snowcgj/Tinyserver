@@ -25,7 +25,7 @@ int main(void) {
 	p = strchr(buf, '&'); //查找 & 字符，假设查询字符串格式为 arg1&arg2
 	*p = '\0';  //  p指向&字符，将 & 替换为 '\0'，将字符串分为两个部分
 	strcpy(arg1, buf);   //在遇到字符串的终止字符 '\0' 时自动停止复制
-	strcpy(arg2, p+1);
+	strcpy(arg2, p+1);  // 找到另一个参数
 	n1 = atoi(arg1);
 	n2 = atoi(arg2);
     }
