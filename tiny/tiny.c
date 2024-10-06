@@ -72,13 +72,16 @@ void doit(int fd)
     rio_t rio;  //声明一个 rio_t 结构 rio，用于高效地读取客户端请求数据
   
     /* Read request line and headers */
-    Rio_readinitb(&rio, fd); 
+    Rio_readinitb(&rio, fd); //连接套接字与 缓冲区绑定（缓冲区初始化）
     Rio_readlineb(&rio, buf, MAXLINE);   
+    // 作用：从缓冲区中读取一行数据，直到遇到换行符或达到 maxlen，并将数据存储到用户提供的缓冲区 usrbuf 中。
+    // 相当于数据现在在buf中
     /* 
     从客户端读取一行数据（请求行），存储在 buf 中。
     例如：GET /index.html HTTP/1.0\r\n
     */ //line:netp:doit:readrequest
     sscanf(buf, "%s %s %s", method, uri, version);       //line:netp:doit:parserequest
+    // 自动以空格作为分割
     if (strcasecmp(method, "GET")) {      //strcasecmp 返回 0 表示相等，如果不为 0               
         //line:netp:doit:beginrequesterr
        clienterror(fd, method, "501", "Not Implemented",
@@ -139,6 +142,7 @@ void read_requesthdrs(rio_t *rp)
 
     Rio_readlineb(rp, buf, MAXLINE); //从 rp 读取一行数据（通常是第一个请求行之后的第一行请求头
     while(strcmp(buf, "\r\n")) {          //line:netp:readhdrs:checkterm
+    // 不相等就返回1， 直到读到\r\n
 	Rio_readlineb(rp, buf, MAXLINE);
     //将读取的请求头内容输出到标准输出
 	printf("%s", buf);
@@ -157,15 +161,34 @@ int parse_uri(char *uri, char *filename, char *cgiargs)
     char *ptr;
 
     if (!strstr(uri, "cgi-bin")) {  /* Static content */ //line:netp:parseuri:isstatic
+    //  string.h里面的库函数 包含返回位置 否则返回NULL
 	strcpy(cgiargs, "");                             //line:netp:parseuri:clearcgi
+    //解释：
+    // 使用 strcpy 函数将 cgiargs 设置为空字符串。
+    // 目的：因为请求的是静态内容，不需要 CGI 参数，所以清空 cgiargs。
 	strcpy(filename, ".");                           //line:netp:parseuri:beginconvert1
 	strcat(filename, uri);                           //line:netp:parseuri:endconvert1
 	if (uri[strlen(uri)-1] == '/')                   //line:netp:parseuri:slashcheck
 	    strcat(filename, "home.html");               //line:netp:parseuri:appenddefault
 	return 1;
+    //     解释：
+    // 检查 uri 的最后一个字符是否为 '/'。
+    // strlen(uri)-1：获取 uri 的最后一个字符的位置。
+    // 目的：
+    // 如果 uri 以 '/' 结尾，通常表示请求的是一个目录，而不是具体的文件。
+    // 处理：为目录请求提供默认的主页文件。
     }
+    /*
+    
+    */
     else {  /* Dynamic content */                        //line:netp:parseuri:isdynamic
 	ptr = index(uri, '?');                           //line:netp:parseuri:beginextract
+    /* 
+    使用 index 函数（GNU 扩展，等同于 strchr）查找 uri 中 '?' 字符的位置。
+    ptr：
+    如果找到 '?'，ptr 指向 '?' 在 uri 中的位置。
+    如果未找到 '?'，ptr 为 NULL
+    */
 	if (ptr) {
 	    strcpy(cgiargs, ptr+1);
 	    *ptr = '\0';
@@ -176,6 +199,12 @@ int parse_uri(char *uri, char *filename, char *cgiargs)
 	strcat(filename, uri);                           //line:netp:parseuri:endconvert2
 	return 0;
     }
+    /*
+    使用 strstr 函数检查 uri 是否包含子字符串 "cgi-bin"。
+    strstr(uri, "cgi-bin")：
+    返回指向 "cgi-bin" 在 uri 中首次出现位置的指针，如果不存在则返回 NULL。!strstr(uri, "cgi-bin")：
+    如果 uri 不包含 "cgi-bin"，则条件为真，表示请求的是静态内容。
+    */
 }
 /* $end parse_uri */
 
@@ -237,7 +266,15 @@ void serve_dynamic(int fd, char *filename, char *cgiargs)
     if (Fork() == 0) { /* child */ //line:netp:servedynamic:fork
 	/* Real server would set all CGI vars here */
 	setenv("QUERY_STRING", cgiargs, 1); //line:netp:servedynamic:setenv
-	Dup2(fd, STDOUT_FILENO);         /* Redirect stdout to client */ //line:netp:servedynamic:dup2
+    /* 
+    解释：使用 setenv 函数设置环境变量 QUERY_STRING，其值为 CGI 参数 cgiargs。
+    参数：
+    "QUERY_STRING"：环境变量名。
+    cgiargs：环境变量值，即 CGI 程序的参数。
+    1：表示如果环境变量已存在，则覆盖其值。
+    作用：CGI 程序通过 QUERY_STRING 环境变量获取传递的参数。
+    */
+	Dup2(fd, STDOUT_FILENO);         /* Redirect stdout to client */ 
 	Execve(filename, emptylist, environ); /* Run CGI program */ //line:netp:servedynamic:execve
     }
     Wait(NULL); /* Parent waits for and reaps child */ //line:netp:servedynamic:wait
